@@ -1,402 +1,245 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Cek Barang — PLU / Barcode</title>
-
-  <!-- Tailwind (Play CDN) untuk tampilan modern cepat -->
-  <script src="https://cdn.tailwindcss.com"></script>
-
-  <!-- XLSX & Html5Qrcode -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Cek Barang via Barcode / PLU</title>
+  <link rel="icon" type="image/png" href="https://upload.wikimedia.org/wikipedia/en/thumb/7/70/Kimetsu_no_Yaiba_logo.svg/320px-Kimetsu_no_Yaiba_logo.svg.png">
   <script src="https://unpkg.com/html5-qrcode"></script>
 
   <style>
-    /* sedikit styling tambahan untuk layar reader */
-    #reader { min-height: 260px; }
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, "Roboto Mono", "Courier New", monospace; }
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@500&display=swap');
+
+    body {
+      font-family: 'Noto Sans JP', 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-image: linear-gradient(45deg, #14532d 25%, transparent 25%),
+                        linear-gradient(-45deg, #14532d 25%, transparent 25%),
+                        linear-gradient(45deg, transparent 75%, #14532d 75%),
+                        linear-gradient(-45deg, transparent 75%, #14532d 75%);
+      background-size: 40px 40px;
+      background-color: #000;
+      color: #f5f5f5;
+    }
+
+    h1 {
+      text-align: center;
+      color: #fff;
+      margin-bottom: 30px;
+      text-shadow: 2px 2px 4px #000000;
+    }
+
+    #searchSection {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-width: 500px;
+      margin: auto;
+    }
+
+    input, button {
+      padding: 12px;
+      font-size: 16px;
+      border-radius: 6px;
+      border: none;
+    }
+
+    input {
+      border: 2px solid #14b8a6;
+      background: #e0f2f1;
+      color: #0f172a;
+    }
+
+    button {
+      background-color: #7f1d1d;
+      color: white;
+      transition: background-color 0.3s ease;
+      font-weight: bold;
+    }
+
+    button:hover {
+      background-color: #a21caf;
+    }
+
+    #reader {
+      margin: 20px auto;
+      max-width: 500px;
+      border: 3px solid #22c55e;
+      border-radius: 8px;
+      background-color: #1e293b;
+      padding: 10px;
+    }
+
+    #result {
+      max-width: 600px;
+      margin: 30px auto;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(8px);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      color: #f8fafc;
+      font-size: 16px;
+    }
+
+    .data-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #94a3b8;
+    }
+
+    .data-item:last-child {
+      border-bottom: none;
+    }
+
+    .label {
+      font-weight: bold;
+      color: #38bdf8;
+    }
+
+    .value {
+      text-align: right;
+      color: #fef3c7;
+    }
+
+    @media (max-width: 600px) {
+      .data-item {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .value {
+        text-align: left;
+        margin-top: 2px;
+      }
+    }
+
+    #uploadSection {
+      text-align: center;
+      margin-top: 10px;
+    }
+
+    #uploadSection input {
+      background: #e0f2f1;
+      color: #111;
+      padding: 8px;
+      border: 2px dashed #14b8a6;
+      width: 80%;
+      margin-top: 5px;
+    }
   </style>
 </head>
-<body class="bg-slate-900 text-slate-100 min-h-screen">
+<body>
+  <h1>Cek Data Barang</h1>
 
-  <div class="max-w-4xl mx-auto p-6">
-    <header class="mb-6">
-      <h1 class="text-3xl font-semibold text-center">Cek Data Barang — PLU / Barcode</h1>
-      <p class="text-center text-slate-300 mt-2">Muat default (.csv / .xlsx) atau pilih file lokal. Upload hanya meng-update data di memori.</p>
-    </header>
-
-    <section class="grid md:grid-cols-2 gap-6">
-      <!-- kiri: pencarian & uploader -->
-      <div class="space-y-4">
-        <div class="bg-slate-800 rounded-lg p-4 shadow">
-          <label class="block text-sm text-slate-300 mb-2">Cari (PLU / Barcode)</label>
-          <div class="flex gap-2">
-            <input id="searchInput" type="text" placeholder="Masukkan PLU atau Barcode" class="flex-1 px-3 py-2 rounded bg-slate-700 text-slate-100 outline-none" />
-            <button id="btnSearch" class="px-4 py-2 rounded bg-rose-600 hover:bg-rose-500">Cari</button>
-          </div>
-
-          <div class="mt-3 flex gap-2">
-            <button id="btnScan" class="px-3 py-2 rounded bg-emerald-600 hover:bg-emerald-500">Scan Barcode</button>
-            <button id="btnStopScan" class="px-3 py-2 rounded bg-slate-600 hover:bg-slate-500">Stop Scan</button>
-          </div>
-        </div>
-
-        <div class="bg-slate-800 rounded-lg p-4 shadow">
-          <label class="block text-sm text-slate-300 mb-2">Database default</label>
-          <div class="flex flex-col gap-2">
-            <p class="text-slate-300 text-sm">Jika website dijalankan lewat server / GitHub Pages dan ada file <span class="mono">barcode.csv</span> atau <span class="mono">barcode.xlsx</span> di folder yang sama, sistem akan otomatis memuat file tersebut.</p>
-
-            <div class="flex gap-2">
-              <button id="btnTryLoadDefault" class="px-3 py-2 rounded bg-sky-600 hover:bg-sky-500">Coba muat default</button>
-              <button id="btnLocalDefault" class="px-3 py-2 rounded bg-yellow-600 hover:bg-yellow-500">Load local default (offline)</button>
-              <button id="btnResetDefault" class="px-3 py-2 rounded bg-slate-600 hover:bg-slate-500">Reset ke default (jika tersedia)</button>
-            </div>
-
-            <div class="pt-2">
-              <label class="block text-sm text-slate-300 mb-1">Upload CSV / XLSX (update data di memori)</label>
-              <input id="uploadInput" type="file" accept=".csv,.xlsx,.xls,.xlsb" class="w-full text-slate-400" />
-              <p class="text-xs text-slate-400 mt-2">Upload hanya mengubah data yang aktif di browser — tidak memodifikasi file di server.</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="bg-slate-800 rounded-lg p-4 shadow">
-          <label class="block text-sm text-slate-300 mb-2">Status</label>
-          <div id="status" class="text-sm text-slate-200">Menunggu aksi... (coba "Coba muat default")</div>
-        </div>
-      </div>
-
-      <!-- kanan: reader & hasil -->
-      <div class="space-y-4">
-        <div id="reader" class="bg-slate-800 rounded-lg p-4 shadow flex items-center justify-center">
-          <div id="readerInner" class="text-slate-300 text-center">
-            <p class="mb-2">Area kamera (klik <span class="font-medium">Scan Barcode</span> untuk mulai)</p>
-            <p class="text-xs text-slate-400">Jika kamera tidak dapat diakses, gunakan tombol <span class="mono">Load local default</span> atau upload CSV/XLSX</p>
-          </div>
-        </div>
-
-        <div id="result" class="bg-slate-800 rounded-lg p-4 shadow min-h-[140px]">
-          <p class="text-sm text-slate-400 mb-2">Hasil pencarian akan tampil di sini.</p>
-          <div id="resultContent"></div>
-        </div>
-      </div>
-    </section>
-
-    <footer class="mt-6 text-center text-slate-400 text-xs">
-      Tip: di mode lokal (file://) browser sering memblokir <code>fetch()</code>. Gunakan "Load local default" untuk memilih file dari komputer — data cuma di memori.
-    </footer>
+  <div id="searchSection">
+    <input type="text" id="searchInput" placeholder="Masukkan PLU atau Barcode" />
+    <button onclick="searchPLU()">Cari</button>
+    <button onclick="startScanner()">Scan Barcode</button>
   </div>
 
+  <div id="uploadSection">
+    <p>🔄 Upload file CSV untuk update database (opsional)</p>
+    <input type="file" id="uploadInput" accept=".csv">
+  </div>
+
+  <div id="reader"></div>
+
+  <div id="result">Memuat database default...</div>
+
   <script>
-    /*****************************
-     * Global state
-     *****************************/
-    let dataRows = [];      // array of objects -> active dataset in memory
-    let defaultLoaded = false;
-    let defaultSource = null; // "csv" or "xlsx" or null
-    let html5Qr = null;
-    let scanning = false;
+    let dataExcel = [];
 
-    const statusEl = document.getElementById('status');
-    const resultContent = document.getElementById('resultContent');
-    const readerEl = document.getElementById('reader');
-
-    /*****************************
-     * Utilities
-     *****************************/
-    function setStatus(text, tone="info") {
-      // tone: info, ok, err
-      statusEl.textContent = text;
-      if (tone === "ok") statusEl.className = "text-sm text-emerald-300";
-      else if (tone === "err") statusEl.className = "text-sm text-rose-400";
-      else statusEl.className = "text-sm text-slate-200";
-    }
-
-    function parseCSVWithXLSX(text) {
-      // XLSX can parse CSV string reliably (handles quotes).
-      try {
-        const wb = XLSX.read(text, { type: 'string' });
-        const sheet = wb.Sheets[wb.SheetNames[0]];
-        return XLSX.utils.sheet_to_json(sheet, { defval: "" });
-      } catch (e) {
-        console.warn("parseCSVWithXLSX failed:", e);
-        return [];
-      }
-    }
-
-    function parseFile(file, callback) {
-      const name = file.name.toLowerCase();
-      const reader = new FileReader();
-
-      if (name.endsWith('.csv')) {
-        reader.onload = e => {
-          const text = e.target.result;
-          const rows = parseCSVWithXLSX(text);
-          callback(null, rows, 'csv');
-        };
-        reader.onerror = e => callback(e);
-        reader.readAsText(file, 'utf-8');
-        return;
-      }
-
-      // for xlsx / xls / xlsb read as arraybuffer and use XLSX
-      reader.onload = e => {
-        try {
-          const data = new Uint8Array(e.target.result);
-          const wb = XLSX.read(data, { type: 'array', cellDates: true });
-          const sheet = wb.Sheets[wb.SheetNames[0]];
-          const rows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-          callback(null, rows, 'xlsx');
-        } catch (err) {
-          callback(err);
-        }
-      };
-      reader.onerror = e => callback(e);
-      reader.readAsArrayBuffer(file);
-    }
-
-    function formatTanggal(nilai) {
-      if (!nilai && nilai !== 0) return '-';
-      // numeric (Excel serial)
-      if (typeof nilai === 'number') {
-        const excelEpoch = new Date(Date.UTC(1899,11,30));
-        const dt = new Date(excelEpoch.getTime() + Math.round(nilai) * 86400000);
-        return dt.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' }).replace(/ /g,'-');
-      }
-      // try parse string dates
-      const parsed = new Date(nilai);
-      if (!isNaN(parsed)) return parsed.toLocaleDateString('id-ID', { day:'2-digit', month:'short', year:'numeric' }).replace(/ /g,'-');
-      return nilai;
-    }
-
-    function showResult(row) {
-      if (!row) {
-        resultContent.innerHTML = '<div class="text-slate-400">Data tidak ditemukan.</div>';
-        return;
-      }
-      // safe access with fallback
-      const get = k => (row[k] !== undefined && row[k] !== null && row[k] !== '') ? row[k] : '-';
-
-      resultContent.innerHTML = `
-        <div class="grid grid-cols-2 gap-2">
-          <div class="py-1"><div class="text-xs text-slate-300">PLU</div><div class="font-medium">${get('PLU')}</div></div>
-          <div class="py-1"><div class="text-xs text-slate-300">BARCODE</div><div class="font-medium">${get('BARCODE')}</div></div>
-
-          <div class="py-1"><div class="text-xs text-slate-300">Deskripsi</div><div>${get('DESC')}</div></div>
-          <div class="py-1"><div class="text-xs text-slate-300">SUPCO</div><div>${get('SUPCO')}</div></div>
-
-          <div class="py-1"><div class="text-xs text-slate-300">Supplier</div><div>${get('NAMA_SUPPLIER')}</div></div>
-          <div class="py-1"><div class="text-xs text-slate-300">KDSB</div><div>${get('KDSB')}</div></div>
-
-          <div class="py-1"><div class="text-xs text-slate-300">TAG</div><div>${get('TAG')}</div></div>
-          <div class="py-1"><div class="text-xs text-slate-300">PTAG</div><div>${formatTanggal(get('PTAG'))}</div></div>
-
-          <div class="py-1"><div class="text-xs text-slate-300">BRG_AKTIF</div><div>${formatTanggal(get('BRG_AKTIF'))}</div></div>          
-
-          <div class="py-1"><div class="text-xs text-slate-300">COVERAGE</div><div>${get('COVERAGE')}</div></div>
-          <div class="py-1"><div class="text-xs text-slate-300">TABLOK</div><div>${get('TABLOK')}</div></div>
-
-          <div class="py-1"><div class="text-xs text-slate-300">LPP_01</div><div>${get('LPP_01_DCI')}</div></div>
-          <div class="py-1"><div class="text-xs text-slate-300">LPP_02</div><div>${get('LPP_02_DCI')}</div></div>
-
-          <div class="py-1 col-span-2"><div class="text-xs text-slate-300">LPP_03</div><div>${get('LPP_03_DCI')}</div></div>
-        </div>
-      `;
-    }
-
-    /*****************************
-     * Loading default (server) — tries barcode.csv then barcode.xlsx
-     *****************************/
-    async function tryLoadDefaultFromServer() {
-      setStatus('Mencoba muat barcode.csv...', 'info');
-      try {
-        const resCsv = await fetch('barcode.csv');
-        if (resCsv.ok) {
-          const text = await resCsv.text();
-          dataRows = parseCSVWithXLSX(text);
-          defaultLoaded = true; defaultSource = 'csv';
-          setStatus('Default CSV dimuat dari server. Baris: ' + dataRows.length, 'ok');
-          return;
-        }
-      } catch (e) {
-        // ignore, try next
-      }
-
-      setStatus('barcode.csv tidak ditemukan, mencoba barcode.xlsx...', 'info');
-      try {
-        const resX = await fetch('barcode.xlsx');
-        if (resX.ok) {
-          const ab = await resX.arrayBuffer();
-          const wb = XLSX.read(new Uint8Array(ab), { type: 'array', cellDates: true });
-          const sheet = wb.Sheets[wb.SheetNames[0]];
-          dataRows = XLSX.utils.sheet_to_json(sheet, { defval: "" });
-          defaultLoaded = true; defaultSource = 'xlsx';
-          setStatus('Default XLSX dimuat dari server. Baris: ' + dataRows.length, 'ok');
-          return;
-        }
-      } catch (e) {
-        // ignore
-      }
-
-      // if got here, no default found or fetch blocked (file://)
-      setStatus('Default tidak ditemukan atau fetch diblokir (mode lokal). Gunakan "Load local default" atau upload CSV/XLSX.', 'err');
-    }
-
-    /*****************************
-     * Local default loader (file picker) — for offline mode
-     *****************************/
-    function loadLocalDefaultFile() {
-      // open file picker
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.csv,.xlsx,.xls,.xlsb';
-      input.onchange = () => {
-        const f = input.files[0];
-        if (!f) return;
-        parseFile(f, (err, rows, type) => {
-          if (err) {
-            setStatus('Gagal baca file lokal: ' + err.message, 'err');
-            return;
-          }
-          dataRows = rows;
-          defaultLoaded = true;
-          defaultSource = type;
-          setStatus('Default lokal dimuat dari "' + f.name + '". Baris: ' + dataRows.length, 'ok');
-        });
-      };
-      input.click();
-    }
-
-    /*****************************
-     * Upload input (update in-memory)
-     *****************************/
-    document.getElementById('uploadInput').addEventListener('change', (e) => {
-      const f = e.target.files[0];
-      if (!f) return;
-      parseFile(f, (err, rows, type) => {
-        if (err) {
-          setStatus('Gagal membaca file upload: ' + err.message, 'err');
-          return;
-        }
-        dataRows = rows;
-        setStatus('Database diperbarui dari file upload: ' + f.name + ' (Baris: ' + dataRows.length + ')', 'ok');
-        // reset file input so user can upload same filename again if needed
-        e.target.value = '';
+    // --- Load database default ---
+    fetch("barcode.csv")
+      .then(response => response.text())
+      .then(csvText => {
+        dataExcel = parseCSV(csvText);
+        document.getElementById('result').innerText = "Database default dimuat! Jumlah data: " + dataExcel.length;
+      })
+      .catch(() => {
+        document.getElementById('result').innerText = "Gagal memuat database default.";
       });
+
+    // --- Upload file baru (update data sementara) ---
+    document.getElementById('uploadInput').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = event => {
+        dataExcel = parseCSV(event.target.result);
+        alert("✅ Database berhasil diperbarui tanpa reload!");
+      };
+      reader.readAsText(file);
     });
 
-    /*****************************
-     * Search function
-     *****************************/
-    function searchPLU(inputManual = null) {
-      const input = (inputManual !== null) ? String(inputManual).trim() : document.getElementById('searchInput').value.trim();
-      if (!input) {
-        setStatus('Silakan masukkan PLU atau BARCODE sebelum mencari.', 'info');
-        return;
-      }
-      if (!dataRows || dataRows.length === 0) {
-        setStatus('Data kosong. Muat default atau upload file terlebih dahulu.', 'err');
-        return;
-      }
-
-      // try numeric match and string match (loose)
-      const found = dataRows.find(r => {
-        // normalize keys existence
-        const plu = r.PLU !== undefined ? String(r.PLU) : '';
-        const bar = r.BARCODE !== undefined ? String(r.BARCODE) : '';
-        return plu === input || bar === input || plu == Number(input) || bar == Number(input);
+    // --- Fungsi bantu parse CSV ---
+    function parseCSV(text) {
+      const [headerLine, ...lines] = text.trim().split("\n");
+      const headers = headerLine.split(",").map(h => h.trim());
+      return lines.map(line => {
+        const values = line.split(",");
+        const row = {};
+        headers.forEach((h, i) => row[h] = values[i] ? values[i].trim() : "");
+        return row;
       });
+    }
 
-      if (found) {
-        showResult(found);
-        setStatus('Data ditemukan.', 'ok');
+    // --- Fungsi pencarian ---
+    function searchPLU(inputManual = null) {
+      const input = inputManual || document.getElementById('searchInput').value.trim();
+      const resultDiv = document.getElementById('result');
+
+      if (!input) {
+        resultDiv.innerHTML = "Silakan masukkan PLU atau BARCODE.";
+        return;
+      }
+
+      const result = dataExcel.find(row =>
+        row.PLU == input || row.BARCODE == input
+      );
+
+      if (result) {
+        resultDiv.innerHTML = `
+          <div class="data-item"><span class="label">PLU</span><span class="value">${result.PLU || '-'}</span></div>
+          <div class="data-item"><span class="label">Deskripsi</span><span class="value">${result.DESC || '-'}</span></div>          
+          <div class="data-item"><span class="label">SUPCO</span><span class="value">${result.SUPCO || '-'}</span></div>
+          <div class="data-item"><span class="label">Supplier</span><span class="value">${result.NAMA_SUPPLIER || '-'}</span></div>
+          <div class="data-item"><span class="label">KDSB</span><span class="value">${result.KDSB || '-'}</span></div>
+          <div class="data-item"><span class="label">TAG</span><span class="value">${result.TAG || '-'}</span></div>
+          <div class="data-item"><span class="label">PTAG</span><span class="value">${result.PTAG || '-'}</span></div>
+          <div class="data-item"><span class="label">Cov</span><span class="value">${result.COVERAGE || '-'}</span></div>
+          <div class="data-item"><span class="label">TABLOK</span><span class="value">${result.TABLOK || '-'}</span></div>          
+          <div class="data-item"><span class="label">LPP_01</span><span class="value">${result.LPP_01_DCI || '-'}</span></div>
+          <div class="data-item"><span class="label">LPP_02</span><span class="value">${result.LPP_02_DCI || '-'}</span></div>
+          <div class="data-item"><span class="label">LPP_03</span><span class="value">${result.LPP_03_DCI || '-'}</span></div>
+        `;
       } else {
-        showResult(null);
-        setStatus('Data tidak ditemukan untuk: ' + input, 'err');
+        resultDiv.innerHTML = "<strong>Data tidak ditemukan.</strong>";
       }
     }
 
-    /*****************************
-     * Scanner control
-     *****************************/
+    // --- Fungsi scan barcode ---
     function startScanner() {
-      if (scanning) return;
-      html5Qr = new Html5Qrcode('reader');
-      const config = { fps: 10, qrbox: { width: 280, height: 200 } };
-      setStatus('Mengaktifkan kamera — izinkan akses jika diminta...', 'info');
+      const html5QrCode = new Html5Qrcode("reader");
+      const config = { fps: 10, qrbox: 250 };
 
-      html5Qr.start(
+      html5QrCode.start(
         { facingMode: "environment" },
         config,
-        (decodedText, decodedResult) => {
-          // saat terdeteksi
-          document.getElementById('searchInput').value = decodedText;
+        (decodedText) => {
+          document.getElementById("searchInput").value = decodedText;
+          html5QrCode.stop();
+          document.getElementById("reader").innerHTML = "";
           searchPLU(decodedText);
         },
-        (errorMessage) => {
-          // ignore per-frame errors
-        }
-      ).then(() => {
-        scanning = true;
-        setStatus('Scanner aktif — arahkan kamera ke barcode.', 'ok');
-      }).catch(err => {
-        setStatus('Gagal buka kamera: ' + err, 'err');
+        () => {}
+      ).catch(err => {
+        document.getElementById("result").innerText = "Gagal membuka kamera: " + err;
       });
     }
-
-    function stopScanner() {
-      if (!scanning || !html5Qr) return;
-      html5Qr.stop().then(() => {
-        scanning = false;
-        html5Qr.clear();
-        html5Qr = null;
-        setStatus('Scanner dimatikan.', 'info');
-        // restore reader info
-        document.getElementById('readerInner')?.remove?.(); // if present
-        readerEl.innerHTML = '<div id="readerInner" class="text-slate-300 text-center"><p class="mb-2">Area kamera (klik "Scan Barcode" untuk mulai)</p><p class="text-xs text-slate-400">Jika kamera tidak dapat diakses, gunakan tombol "Load local default" atau upload CSV/XLSX</p></div>';
-      }).catch(err => {
-        setStatus('Gagal menghentikan scanner: ' + err, 'err');
-      });
-    }
-
-    /*****************************
-     * Buttons & events
-     *****************************/
-    document.getElementById('btnSearch').addEventListener('click', () => searchPLU());
-    document.getElementById('btnScan').addEventListener('click', () => startScanner());
-    document.getElementById('btnStopScan').addEventListener('click', () => stopScanner());
-    document.getElementById('btnTryLoadDefault').addEventListener('click', () => tryLoadDefaultFromServer());
-    document.getElementById('btnLocalDefault').addEventListener('click', () => loadLocalDefaultFile());
-    document.getElementById('btnResetDefault').addEventListener('click', () => {
-      if (defaultLoaded && defaultSource && (defaultSource === 'csv' || defaultSource === 'xlsx')) {
-        // If default was loaded from server, re-fetch; if loaded local file earlier, ask user to re-select
-        if (location.protocol === 'http:' || location.protocol === 'https:') {
-          setStatus('Mereset ke default dari server...', 'info');
-          tryLoadDefaultFromServer();
-        } else {
-          setStatus('Halaman dibuka lokal; gunakan "Load local default" untuk memilih file default lagi.', 'info');
-          loadLocalDefaultFile();
-        }
-      } else {
-        setStatus('Belum ada default yang dimuat. Gunakan "Coba muat default" atau "Load local default".', 'info');
-      }
-    });
-
-    /*****************************
-     * Init: try auto-load (server) after small delay
-     *****************************/
-    // Delay a bit to allow page to be fully interactive
-    setTimeout(() => {
-      // Only auto-try load if page served via http(s) or GitHub Pages.
-      if (location.protocol === 'http:' || location.protocol === 'https:') {
-        tryLoadDefaultFromServer();
-      } else {
-        // file:// mode -> show friendly message
-        setStatus('Mode lokal (file://). Klik "Load local default" untuk memilih file dari komputer, atau upload CSV/XLSX.', 'info');
-      }
-    }, 300);
   </script>
 </body>
 </html>
-
