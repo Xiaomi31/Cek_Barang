@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Cek Barang via Barcode / PLU</title>
+  <link rel="icon" type="image/png" href="https://upload.wikimedia.org/wikipedia/en/thumb/7/70/Kimetsu_no_Yaiba_logo.svg/320px-Kimetsu_no_Yaiba_logo.svg.png">
+  <script src="https://unpkg.com/html5-qrcode"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@500&display=swap');
+
+    body {
+      font-family: 'Noto Sans JP', 'Segoe UI', sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-image: linear-gradient(45deg, #14532d 25%, transparent 25%),
+                        linear-gradient(-45deg, #14532d 25%, transparent 25%),
+                        linear-gradient(45deg, transparent 75%, #14532d 75%),
+                        linear-gradient(-45deg, transparent 75%, #14532d 75%);
+      background-size: 40px 40px;
+      background-color: #000;
+      color: #f5f5f5;
+    }
+
+    h1 {
+      text-align: center;
+      color: #fff;
+      margin-bottom: 30px;
+      text-shadow: 2px 2px 4px #000000;
+    }
+
+    #searchSection {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-width: 500px;
+      margin: auto;
+    }
+
+    input, button {
+      padding: 12px;
+      font-size: 16px;
+      border-radius: 6px;
+      border: none;
+    }
+
+    input {
+      border: 2px solid #14b8a6;
+      background: #e0f2f1;
+      color: #0f172a;
+    }
+
+    button {
+      background-color: #7f1d1d;
+      color: white;
+      transition: background-color 0.3s ease;
+      font-weight: bold;
+    }
+
+    button:hover {
+      background-color: #a21caf;
+    }
+
+    #reader {
+      margin: 20px auto;
+      max-width: 500px;
+      border: 3px solid #22c55e;
+      border-radius: 8px;
+      background-color: #1e293b;
+      padding: 10px;
+    }
+
+    #result {
+      max-width: 600px;
+      margin: 30px auto;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(8px);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+      color: #f8fafc;
+      font-size: 16px;
+    }
+
+    .data-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #94a3b8;
+    }
+
+    .data-item:last-child {
+      border-bottom: none;
+    }
+
+    .label {
+      font-weight: bold;
+      color: #38bdf8;
+    }
+
+    .value {
+      text-align: right;
+      color: #fef3c7;
+    }
+
+    @media (max-width: 600px) {
+      .data-item {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .value {
+        text-align: left;
+        margin-top: 2px;
+      }
+    }
+
+    #uploadSection {
+      text-align: center;
+      margin-top: 10px;
+    }
+
+    #uploadSection input {
+      background: #e0f2f1;
+      color: #111;
+      padding: 8px;
+      border: 2px dashed #14b8a6;
+      width: 80%;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Cek Data Barang</h1>
+
+  <div id="searchSection">
+    <input type="text" id="searchInput" placeholder="Masukkan PLU atau Barcode" />
+    <button onclick="searchPLU()">Cari</button>
+    <button onclick="startScanner()">Scan Barcode</button>
+  </div>
+
+  <div id="uploadSection">
+    <p>🔄 Upload file CSV untuk update database (opsional)</p>
+    <input type="file" id="uploadInput" accept=".csv">
+  </div>
+
+  <div id="reader"></div>
+
+  <div id="result">Memuat database default...</div>
+
+  <script>
+    let dataExcel = [];
+
+    // --- Load database default ---
+    fetch("barcode.csv")
+      .then(response => response.text())
+      .then(csvText => {
+        dataExcel = parseCSV(csvText);
+        document.getElementById('result').innerText = "Database default dimuat! Jumlah data: " + dataExcel.length;
+      })
+      .catch(() => {
+        document.getElementById('result').innerText = "Gagal memuat database default.";
+      });
+
+    // --- Upload file baru (update data sementara) ---
+    document.getElementById('uploadInput').addEventListener('change', function(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = event => {
+        dataExcel = parseCSV(event.target.result);
+        alert("✅ Database berhasil diperbarui tanpa reload!");
+      };
+      reader.readAsText(file);
+    });
+
+    // --- Fungsi bantu parse CSV ---
+    function parseCSV(text) {
+      const [headerLine, ...lines] = text.trim().split("\n");
+      const headers = headerLine.split(",").map(h => h.trim());
+      return lines.map(line => {
+        const values = line.split(",");
+        const row = {};
+        headers.forEach((h, i) => row[h] = values[i] ? values[i].trim() : "");
+        return row;
+      });
+    }
+
+    // --- Fungsi pencarian ---
+    function searchPLU(inputManual = null) {
+      const input = inputManual || document.getElementById('searchInput').value.trim();
+      const resultDiv = document.getElementById('result');
+
+      if (!input) {
+        resultDiv.innerHTML = "Silakan masukkan PLU atau BARCODE.";
+        return;
+      }
+
+      const result = dataExcel.find(row =>
+        row.PLU == input || row.BARCODE == input
+      );
+
+      if (result) {
+        resultDiv.innerHTML = `
+          <div class="data-item"><span class="label">PLU</span><span class="value">${result.PLU || '-'}</span></div>
+          <div class="data-item"><span class="label">Deskripsi</span><span class="value">${result.DESC || '-'}</span></div>          
+          <div class="data-item"><span class="label">SUPCO</span><span class="value">${result.SUPCO || '-'}</span></div>
+          <div class="data-item"><span class="label">Supplier</span><span class="value">${result.NAMA_SUPPLIER || '-'}</span></div>
+          <div class="data-item"><span class="label">KDSB</span><span class="value">${result.KDSB || '-'}</span></div>
+          <div class="data-item"><span class="label">TAG</span><span class="value">${result.TAG || '-'}</span></div>
+          <div class="data-item"><span class="label">PTAG</span><span class="value">${result.PTAG || '-'}</span></div>
+          <div class="data-item"><span class="label">Cov</span><span class="value">${result.COVERAGE || '-'}</span></div>
+          <div class="data-item"><span class="label">TABLOK</span><span class="value">${result.TABLOK || '-'}</span></div>          
+          <div class="data-item"><span class="label">LPP_01</span><span class="value">${result.LPP_01_DCI || '-'}</span></div>
+          <div class="data-item"><span class="label">LPP_02</span><span class="value">${result.LPP_02_DCI || '-'}</span></div>
+          <div class="data-item"><span class="label">LPP_03</span><span class="value">${result.LPP_03_DCI || '-'}</span></div>
+        `;
+      } else {
+        resultDiv.innerHTML = "<strong>Data tidak ditemukan.</strong>";
+      }
+    }
+
+    // --- Fungsi scan barcode ---
+    function startScanner() {
+      const html5QrCode = new Html5Qrcode("reader");
+      const config = { fps: 10, qrbox: 250 };
+
+      html5QrCode.start(
+        { facingMode: "environment" },
+        config,
+        (decodedText) => {
+          document.getElementById("searchInput").value = decodedText;
+          html5QrCode.stop();
+          document.getElementById("reader").innerHTML = "";
+          searchPLU(decodedText);
+        },
+        () => {}
+      ).catch(err => {
+        document.getElementById("result").innerText = "Gagal membuka kamera: " + err;
+      });
+    }
+  </script>
+</body>
+</html>
